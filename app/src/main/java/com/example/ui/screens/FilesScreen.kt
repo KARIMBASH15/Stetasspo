@@ -29,16 +29,29 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,12 +73,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.manager.FileManager
+import com.example.manager.PermissionsManager
+import com.example.manager.StorageShortcut
 import com.example.manager.VaultManager
 import com.example.model.FileCategory
 import com.example.model.FileItem
@@ -84,6 +101,7 @@ import java.io.File
 fun FilesScreen(
     fileManager: FileManager,
     vaultManager: VaultManager,
+    permissionsManager: PermissionsManager? = null,
     onOpenMedia: (MediaTrack) -> Unit,
     onOpenHtmlInBrowser: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -151,20 +169,20 @@ fun FilesScreen(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 modifier = Modifier.padding(end = 8.dp)
                             ) {
-                                Text("Paste (${fileManager.clipboardFiles.size})", modifier = Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall)
+                                Text("لصق (${fileManager.clipboardFiles.size})", modifier = Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall)
                             }
                             SmallFloatingActionButton(
                                 onClick = {
                                     speedDialOpen = false
                                     scope.launch {
                                         val ok = fileManager.pasteClipboard(currentDir)
-                                        Toast.makeText(context, if (ok) "Pasted successfully" else "Failed to paste", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, if (ok) "تم اللصق بنجاح" else "تعذر اللصق", Toast.LENGTH_SHORT).show()
                                         refreshFiles()
                                     }
                                 },
                                 containerColor = MaterialTheme.colorScheme.tertiary
                             ) {
-                                Icon(Icons.Default.ContentPaste, contentDescription = "Paste")
+                                Icon(Icons.Default.ContentPaste, contentDescription = "لصق")
                             }
                         }
                     }
@@ -175,7 +193,7 @@ fun FilesScreen(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
-                            Text("New HTML File", modifier = Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall)
+                            Text("ملف جديد", modifier = Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall)
                         }
                         SmallFloatingActionButton(
                             onClick = {
@@ -184,7 +202,7 @@ fun FilesScreen(
                             },
                             containerColor = MaterialTheme.colorScheme.secondary
                         ) {
-                            Icon(Icons.Default.NoteAdd, contentDescription = "New File")
+                            Icon(Icons.Default.NoteAdd, contentDescription = "ملف جديد")
                         }
                     }
 
@@ -194,7 +212,7 @@ fun FilesScreen(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
-                            Text("New Folder", modifier = Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall)
+                            Text("مجلد جديد", modifier = Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall)
                         }
                         SmallFloatingActionButton(
                             onClick = {
@@ -203,7 +221,7 @@ fun FilesScreen(
                             },
                             containerColor = MaterialTheme.colorScheme.primary
                         ) {
-                            Icon(Icons.Default.CreateNewFolder, contentDescription = "New Folder")
+                            Icon(Icons.Default.CreateNewFolder, contentDescription = "مجلد جديد")
                         }
                     }
                 }
@@ -216,7 +234,7 @@ fun FilesScreen(
                 ) {
                     Icon(
                         imageVector = if (speedDialOpen) Icons.Default.Clear else Icons.Default.Add,
-                        contentDescription = "Actions"
+                        contentDescription = "إجراءات"
                     )
                 }
             }
@@ -241,14 +259,14 @@ fun FilesScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("search_field"),
-                            placeholder = { Text("Search files, videos, audios...") },
+                            placeholder = { Text("البحث في جميع الملفات والمجلدات...") },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                             trailingIcon = {
                                 IconButton(onClick = {
                                     searchQuery = ""
                                     isSearchActive = false
                                 }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Close search")
+                                    Icon(Icons.Default.Clear, contentDescription = "إغلاق البحث")
                                 }
                             },
                             singleLine = true,
@@ -263,17 +281,17 @@ fun FilesScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (canGoBack) {
                                     IconButton(onClick = { currentDir.parentFile?.let { currentDir = it } }) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                        Icon(Icons.Default.ArrowBack, contentDescription = "رجوع")
                                     }
                                 }
                                 Column {
                                     Text(
-                                        text = currentDir.name.ifEmpty { "Internal Storage" },
+                                        text = if (currentDir.absolutePath == fileManager.getRootDirectory().absolutePath) "الذاكرة الداخلية" else currentDir.name,
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "${fileItems.size} items",
+                                        text = "${fileItems.size} عنصر",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -282,11 +300,11 @@ fun FilesScreen(
 
                             Row {
                                 IconButton(onClick = { isSearchActive = true }) {
-                                    Icon(Icons.Default.Search, contentDescription = "Search")
+                                    Icon(Icons.Default.Search, contentDescription = "بحث")
                                 }
                                 Box {
                                     IconButton(onClick = { sortMenuOpen = true }) {
-                                        Icon(Icons.Default.Sort, contentDescription = "Sort")
+                                        Icon(Icons.Default.Sort, contentDescription = "ترتيب")
                                     }
                                     DropdownMenu(
                                         expanded = sortMenuOpen,
@@ -294,7 +312,7 @@ fun FilesScreen(
                                     ) {
                                         SortOption.values().forEach { opt ->
                                             DropdownMenuItem(
-                                                text = { Text(opt.title) },
+                                                text = { Text(opt.titleAr) },
                                                 onClick = {
                                                     sortOption = opt
                                                     sortMenuOpen = false
@@ -317,7 +335,7 @@ fun FilesScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Root",
+                            text = "الذاكرة الرئيسية",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable { currentDir = fileManager.getRootDirectory() }
@@ -339,19 +357,119 @@ fun FilesScreen(
                 }
             }
 
+            // Missing All Files Permission Banner
+            if (permissionsManager != null && !permissionsManager.hasAllFilesAccess()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "إذن إدارة جميع الملفات غير مفعل",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Text(
+                                    text = "مطلوب لتصفح وتعديل كافة مجلدات الذاكرة بدون قيود",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+
+                        FilledTonalButton(
+                            onClick = { permissionsManager.openAllFilesAccessSettings() },
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("تفعيل", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            // Quick Storage Shortcuts Carousel (Internal Storage, Downloads, DCIM, Documents, Music, Videos)
+            val shortcuts = remember { fileManager.getStorageShortcuts() }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                shortcuts.forEach { shortcut ->
+                    val isSelected = currentDir.absolutePath == shortcut.directory.absolutePath
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        tonalElevation = if (isSelected) 4.dp else 0.dp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable {
+                                currentDir = shortcut.directory
+                            }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = when (shortcut.iconType) {
+                                    "storage" -> Icons.Default.Storage
+                                    "downloads" -> Icons.Default.Download
+                                    "camera" -> Icons.Default.PhotoCamera
+                                    "documents" -> Icons.Default.Description
+                                    "music" -> Icons.Default.Headphones
+                                    "videos" -> Icons.Default.SmartDisplay
+                                    else -> Icons.Default.Folder
+                                },
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = shortcut.nameAr,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                ),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
             // Category Chips Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FileCategory.values().forEach { cat ->
                     FilterChip(
                         selected = selectedCategory == cat,
                         onClick = { selectedCategory = cat },
-                        label = { Text(cat.label) },
+                        label = { Text(cat.labelAr) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -587,12 +705,12 @@ fun FilesScreen(
         var folderName by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showNewFolderDialog = false },
-            title = { Text("Create New Folder (إنشاء مجلد)") },
+            title = { Text("إنشاء مجلد جديد") },
             text = {
                 OutlinedTextField(
                     value = folderName,
                     onValueChange = { folderName = it },
-                    label = { Text("Folder Name") },
+                    label = { Text("اسم المجلد") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -608,10 +726,10 @@ fun FilesScreen(
                             }
                         }
                     }
-                ) { Text("Create") }
+                ) { Text("إنشاء") }
             },
             dismissButton = {
-                TextButton(onClick = { showNewFolderDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showNewFolderDialog = false }) { Text("إلغاء") }
             }
         )
     }
@@ -621,12 +739,12 @@ fun FilesScreen(
         var fileName by remember { mutableStateOf("new_page.html") }
         AlertDialog(
             onDismissRequest = { showNewFileDialog = false },
-            title = { Text("Create New File (إنشاء ملف جديد)") },
+            title = { Text("إنشاء ملف جديد") },
             text = {
                 OutlinedTextField(
                     value = fileName,
                     onValueChange = { fileName = it },
-                    label = { Text("File Name (e.g. page.html or notes.txt)") },
+                    label = { Text("اسم الملف (مثال: page.html أو notes.txt)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -637,9 +755,9 @@ fun FilesScreen(
                         if (fileName.isNotBlank()) {
                             scope.launch {
                                 val template = if (fileName.endsWith(".html")) {
-                                    "<!DOCTYPE html>\n<html>\n<head><title>My HTML</title></head>\n<body>\n<h1>Hello from FileHub!</h1>\n</body>\n</html>"
+                                    "<!DOCTYPE html>\n<html>\n<head><title>صفحتي</title></head>\n<body>\n<h1>مرحباً بك في FileHub!</h1>\n</body>\n</html>"
                                 } else {
-                                    "Created with FileHub Pro"
+                                    "تم الإنشاء بواسطة FileHub Pro"
                                 }
                                 fileManager.createTextFile(currentDir, fileName.trim(), template)
                                 showNewFileDialog = false
@@ -647,10 +765,10 @@ fun FilesScreen(
                             }
                         }
                     }
-                ) { Text("Create") }
+                ) { Text("إنشاء") }
             },
             dismissButton = {
-                TextButton(onClick = { showNewFileDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showNewFileDialog = false }) { Text("إلغاء") }
             }
         )
     }
@@ -660,12 +778,12 @@ fun FilesScreen(
         var newName by remember { mutableStateOf(item.name) }
         AlertDialog(
             onDismissRequest = { showRenameDialog = null },
-            title = { Text("Rename File (إعادة التسمية)") },
+            title = { Text("إعادة تسمية الملف") },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
-                    label = { Text("New Name") },
+                    label = { Text("الاسم الجديد") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -681,10 +799,10 @@ fun FilesScreen(
                             }
                         }
                     }
-                ) { Text("Rename") }
+                ) { Text("تعديل") }
             },
             dismissButton = {
-                TextButton(onClick = { showRenameDialog = null }) { Text("Cancel") }
+                TextButton(onClick = { showRenameDialog = null }) { Text("إلغاء") }
             }
         )
     }

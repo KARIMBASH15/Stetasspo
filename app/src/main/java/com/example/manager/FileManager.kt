@@ -1,7 +1,10 @@
 package com.example.manager
 
 import android.content.Context
+import android.os.Build
 import android.os.Environment
+import android.os.StatFs
+import android.provider.MediaStore
 import com.example.model.FileCategory
 import com.example.model.FileItem
 import com.example.model.SortOption
@@ -21,6 +24,14 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
+data class StorageShortcut(
+    val id: String,
+    val name: String,
+    val nameAr: String,
+    val directory: File,
+    val iconType: String
+)
+
 class FileManager(private val context: Context) {
 
     var clipboardFiles: List<File> = emptyList()
@@ -29,13 +40,61 @@ class FileManager(private val context: Context) {
         private set
 
     fun getRootDirectory(): File {
+        val extStorage = Environment.getExternalStorageDirectory()
+        // If external primary storage exists and can be read, use it as root
+        return if (extStorage.exists() && extStorage.canRead()) {
+            extStorage
+        } else {
+            getAppStorageDirectory()
+        }
+    }
+
+    fun getAppStorageDirectory(): File {
+        val appFolder = File(Environment.getExternalStorageDirectory(), "FileHub")
+        if (!appFolder.exists()) {
+            try {
+                appFolder.mkdirs()
+            } catch (_: Exception) {}
+        }
         val external = context.getExternalFilesDir(null)
         val filesDir = context.filesDir
-        val storageRoot = File(Environment.getExternalStorageDirectory(), "FileHub")
-        if (!storageRoot.exists()) {
-            storageRoot.mkdirs()
+        return if (appFolder.exists() && appFolder.canWrite()) appFolder else (external ?: filesDir)
+    }
+
+    fun getStorageShortcuts(): List<StorageShortcut> {
+        val list = mutableListOf<StorageShortcut>()
+        val root = Environment.getExternalStorageDirectory()
+        list.add(StorageShortcut("storage_root", "Internal Storage", "الذاكرة الداخلية", root, "storage"))
+
+        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (downloads != null) {
+            list.add(StorageShortcut("downloads", "Downloads", "التنزيلات", downloads, "downloads"))
         }
-        return if (storageRoot.canWrite()) storageRoot else (external ?: filesDir)
+
+        val dcim = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+        if (dcim != null) {
+            list.add(StorageShortcut("camera", "Camera / Photos", "الصور والكاميرا", dcim, "camera"))
+        }
+
+        val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        if (docs != null) {
+            list.add(StorageShortcut("docs", "Documents", "المستندات", docs, "documents"))
+        }
+
+        val music = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        if (music != null) {
+            list.add(StorageShortcut("music", "Music", "الموسيقى", music, "music"))
+        }
+
+        val movies = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+        if (movies != null) {
+            list.add(StorageShortcut("movies", "Videos", "الفيديوهات", movies, "videos"))
+        }
+
+        val appDir = getAppStorageDirectory()
+        list.add(StorageShortcut("app_dir", "FileHub App Folder", "مجلد FileHub", appDir, "app"))
+
+        return list
     }
 
     suspend fun listDirectory(
@@ -238,36 +297,56 @@ class FileManager(private val context: Context) {
     }
 
     suspend fun getStorageStats(): StorageStats = withContext(Dispatchers.IO) {
-        val root = context.filesDir
-        val totalSpace = root.totalSpace.coerceAtLeast(1024L * 1024L * 1024L * 32L) // 32 GB default
-        val freeSpace = root.freeSpace.coerceAtLeast(1024L * 1024L * 1024L * 12L)
+        val storagePath = try {
+            Environment.getExternalStorageDirectory().path
+        } catch (_: Exception) {
+            context.filesDir.path
+        }
+        val stat = try {
+            StatFs(storagePath)
+        } catch (_: Exception) {
+            StatFs(context.filesDir.path)
+        }
 
-        var img = 0L
-        var vid = 0L
-        var aud = 0L
+        val totalSpace = stat.totalBytes.coerceAtLeast(1024L * 1024L * 1024L * 8L)
+        val freeSpace = stat.availableBytes.coerceAtLeast(0L)
+        val realUsed = (totalSpace - freeSpace).coerceAtLeast(0L)
+
+        // Query MediaStore for fast, accurate media size sums across device storage
+        var img = queryMediaStoreCategoryBytes(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        var vid = queryMediaStoreCategoryBytes(MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+        var aud = queryMediaStoreCategoryBytes(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)
         var doc = 0L
         var arch = 0L
         var oth = 0L
 
-        getRootDirectory().walkTopDown().maxDepth(5).forEach { f ->
-            if (f.isFile) {
-                val len = f.length()
-                when (FileItem(f).category) {
-                    FileCategory.IMAGES -> img += len
-                    FileCategory.VIDEO -> vid += len
-                    FileCategory.AUDIO -> aud += len
-                    FileCategory.DOCUMENTS -> doc += len
-                    FileCategory.ARCHIVES -> arch += len
-                    else -> oth += len
+        // Scan quick files in root directory
+        try {
+            val root = getRootDirectory()
+            root.listFiles()?.forEach { file ->
+                if (file.isFile) {
+                    val len = file.length()
+                    when (FileItem(file).category) {
+                        FileCategory.DOCUMENTS -> doc += len
+                        FileCategory.ARCHIVES -> arch += len
+                        FileCategory.IMAGES -> if (img == 0L) img += len
+                        FileCategory.VIDEO -> if (vid == 0L) vid += len
+                        FileCategory.AUDIO -> if (aud == 0L) aud += len
+                        else -> oth += len
+                    }
                 }
             }
+        } catch (_: Exception) {}
+
+        val categorizedSum = img + vid + aud + doc + arch + oth
+        if (realUsed > categorizedSum) {
+            oth = (realUsed - (img + vid + aud + doc + arch)).coerceAtLeast(0L)
         }
 
-        val calculatedUsed = (totalSpace - freeSpace).coerceAtLeast(img + vid + aud + doc + arch + oth)
         StorageStats(
             totalBytes = totalSpace,
-            usedBytes = calculatedUsed,
-            freeBytes = (totalSpace - calculatedUsed).coerceAtLeast(0L),
+            usedBytes = realUsed,
+            freeBytes = freeSpace,
             imagesBytes = img,
             videoBytes = vid,
             audioBytes = aud,
@@ -277,12 +356,30 @@ class FileManager(private val context: Context) {
         )
     }
 
+    private fun queryMediaStoreCategoryBytes(uri: android.net.Uri): Long {
+        var total = 0L
+        try {
+            val projection = arrayOf(MediaStore.MediaColumns.SIZE)
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                val sizeIndex = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                if (sizeIndex != -1) {
+                    while (cursor.moveToNext()) {
+                        val size = cursor.getLong(sizeIndex)
+                        if (size > 0) total += size
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return total
+    }
+
     fun formatFileSize(bytes: Long): String {
         if (bytes <= 0) return "0 B"
         val units = arrayOf("B", "KB", "MB", "GB", "TB")
         val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
         val formatted = String.format(Locale.US, "%.1f", bytes / Math.pow(1024.0, digitGroups.toDouble()))
-        return "$formatted ${units[digitGroups]}"
+        val unitsAr = arrayOf("بايت", "ك.ب", "م.ب", "ج.ب", "ت.ب")
+        return "$formatted ${units[digitGroups]} (${unitsAr[digitGroups]})"
     }
 
     fun formatDate(timestamp: Long): String {

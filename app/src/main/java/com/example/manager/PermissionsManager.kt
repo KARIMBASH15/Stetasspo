@@ -98,7 +98,7 @@ class PermissionsManager(private val context: Context) {
                     name = "All Files Access (Storage Manager)",
                     nameAr = "إدارة جميع الملفات بالذاكرة",
                     description = "Gives full access to copy, move, rename, unzip, and organize all storage folders.",
-                    descriptionAr = "يمنح تحكماً شاملاً لنسخ ونقل وفك ضغط وتنظيم ملفات الذاكرة.",
+                    descriptionAr = "يمنح تحكماً شاملاً لتصفح ونسخ ونقل وفك ضغط وتنظيم ملفات الذاكرة الداخلية.",
                     isGranted = hasAllFiles,
                     permissionKey = Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                     isCritical = true
@@ -106,8 +106,81 @@ class PermissionsManager(private val context: Context) {
             )
         }
 
+        // 6. Display Over Other Apps (Floating Icon & Widget)
+        list.add(
+            PermissionItem(
+                id = "overlay_perm",
+                name = "Display Over Other Apps",
+                nameAr = "الظهور فوق التطبيقات الأخرى (الأيقونة العائمة)",
+                description = "Enables the floating shortcut icon and quick widget to appear over any app.",
+                descriptionAr = "يتيح للأيقونة العائمة والمفكرة السريعة العمل والظهور فوق كافة التطبيقات الأخرى.",
+                isGranted = hasOverlayPermission(),
+                permissionKey = Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                isCritical = false
+            )
+        )
+
         return list
     }
+
+    fun hasOverlayPermission(): Boolean {
+        return Settings.canDrawOverlays(context)
+    }
+
+    fun openOverlaySettings() {
+        try {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${context.packageName}")
+            ).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            openAppSettings()
+        }
+    }
+
+    fun hasAllFilesAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            isPermissionGranted(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    fun hasMediaAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            isPermissionGranted(Manifest.permission.READ_MEDIA_AUDIO) ||
+            isPermissionGranted(Manifest.permission.READ_MEDIA_IMAGES) ||
+            isPermissionGranted(Manifest.permission.READ_MEDIA_VIDEO) ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager())
+        } else {
+            isPermissionGranted(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    fun getRuntimePermissionsToRequest(): Array<String> {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }
+        return permissions.toTypedArray()
+    }
+
+    private val prefs = context.getSharedPreferences("permissions_prefs", Context.MODE_PRIVATE)
+
+    var hasCompletedFirstTimePermissions: Boolean
+        get() = prefs.getBoolean("has_completed_first_time", false)
+        set(value) = prefs.edit().putBoolean("has_completed_first_time", value).apply()
 
     fun isPermissionGranted(permission: String): Boolean {
         return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -130,7 +203,14 @@ class PermissionsManager(private val context: Context) {
                 }
                 context.startActivity(intent)
             } catch (e: Exception) {
-                openAppSettings()
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (e2: Exception) {
+                    openAppSettings()
+                }
             }
         } else {
             openAppSettings()

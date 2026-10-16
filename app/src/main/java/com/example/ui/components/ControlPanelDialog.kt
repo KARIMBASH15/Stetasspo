@@ -91,13 +91,13 @@ fun ControlPanelDialog(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "Control Panel (لوحة التحكم)",
+                        text = "لوحة التحكم بالأقسام",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         maxLines = 1,
                         softWrap = false
                     )
                     Text(
-                        text = "Show or hide bottom navigation tabs",
+                        text = "إظهار أو إخفاء أقسام شريط التنقل السفلي",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -109,7 +109,7 @@ fun ControlPanelDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Customize which sections appear in the bottom navigation bar. (At least 2 tabs required)",
+                    text = "خصص الأقسام التي تظهر في الشريط السفلي حسب استخدامك (يلزم قسمين على الأقل):",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -162,7 +162,7 @@ fun ControlPanelDialog(
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            text = meta.tab.title,
+                                            text = meta.tab.titleAr,
                                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                             maxLines = 1,
                                             softWrap = false
@@ -182,7 +182,7 @@ fun ControlPanelDialog(
                                     onCheckedChange = {
                                         val ok = tabVisibilityManager.toggleTab(meta.tab)
                                         if (!ok) {
-                                            Toast.makeText(context, "At least 2 tabs must remain visible", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "يجب الإبقاء على قسمين على الأقل", Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     colors = SwitchDefaults.colors(
@@ -206,16 +206,16 @@ fun ControlPanelDialog(
                 OutlinedButton(
                     onClick = {
                         tabVisibilityManager.resetToDefaults()
-                        Toast.makeText(context, "Reset to default tabs", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "تمت استعادة الأقسام الافتراضية", Toast.LENGTH_SHORT).show()
                     }
                 ) {
                     Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Reset")
+                    Text("استعادة")
                 }
 
                 TextButton(onClick = onDismiss) {
-                    Text("Done")
+                    Text("تم")
                 }
             }
         }

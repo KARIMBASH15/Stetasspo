@@ -116,11 +116,11 @@ fun CloudScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "Device Storage (ذاكرة الجهاز)",
+                                    text = "ذاكرة الجهاز الداخلية",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Text(
-                                    text = "Internal Flash Memory",
+                                    text = "محلل الذاكرة والتخزين الفعلي",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -129,11 +129,11 @@ fun CloudScreen(
 
                         IconButton(onClick = {
                             scope.launch {
-                                Toast.makeText(context, "Storage cache optimized", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "تم تحديث وتحسين إحصائيات الذاكرة", Toast.LENGTH_SHORT).show()
                                 loadStorage()
                             }
                         }) {
-                            Icon(Icons.Default.CleaningServices, contentDescription = "Clean Cache", tint = MaterialTheme.colorScheme.tertiary)
+                            Icon(Icons.Default.CleaningServices, contentDescription = "تنظيف الذاكرة المؤقتة", tint = MaterialTheme.colorScheme.tertiary)
                         }
                     }
 
@@ -155,11 +155,11 @@ fun CloudScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Used: ${fileManager.formatFileSize(stats.usedBytes)} (${(usedPercent * 100).toInt()}%)",
+                                text = "المستخدمة: ${fileManager.formatFileSize(stats.usedBytes)} (${(usedPercent * 100).toInt()}%)",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                             )
                             Text(
-                                text = "Free: ${fileManager.formatFileSize(stats.freeBytes)}",
+                                text = "المتوفرة: ${fileManager.formatFileSize(stats.freeBytes)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -172,10 +172,10 @@ fun CloudScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            StorageTag("Videos", fileManager.formatFileSize(stats.videoBytes), Color(0xFFF43F5E))
-                            StorageTag("Audio", fileManager.formatFileSize(stats.audioBytes), Color(0xFF10B981))
-                            StorageTag("Images", fileManager.formatFileSize(stats.imagesBytes), Color(0xFF8B5CF6))
-                            StorageTag("Docs", fileManager.formatFileSize(stats.docsBytes), Color(0xFF0EA5E9))
+                            StorageTag("فيديوهات", fileManager.formatFileSize(stats.videoBytes), Color(0xFFF43F5E))
+                            StorageTag("صوتيات", fileManager.formatFileSize(stats.audioBytes), Color(0xFF10B981))
+                            StorageTag("صور", fileManager.formatFileSize(stats.imagesBytes), Color(0xFF8B5CF6))
+                            StorageTag("مستندات", fileManager.formatFileSize(stats.docsBytes), Color(0xFF0EA5E9))
                         }
                     } ?: run {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())

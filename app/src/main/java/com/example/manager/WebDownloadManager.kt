@@ -59,10 +59,14 @@ class WebDownloadManager(private val context: Context) {
     private suspend fun executeDownload(task: DownloadTask) = withContext(Dispatchers.IO) {
         val targetFile = File(getDownloadDir(), task.fileName)
         try {
-            val request = Request.Builder().url(task.url).build()
+            val request = Request.Builder()
+                .url(task.url)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "*/*")
+                .build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    updateTaskStatus(task.id, DownloadStatus.FAILED, "HTTP ${response.code}")
+                    updateTaskStatus(task.id, DownloadStatus.FAILED, "خطأ HTTP ${response.code}")
                     return@use
                 }
                 val body = response.body ?: run {

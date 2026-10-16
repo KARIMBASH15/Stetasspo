@@ -89,11 +89,11 @@ fun PermissionsScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "Permission Manager (إدارة الأذونات)",
+                        text = "إدارة أذونات وحماية النظام",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "System Access & Storage Governance",
+                        text = "صلاحيات الوصول للتخزين والوسائط والإشعارات",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -119,14 +119,14 @@ fun PermissionsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (grantedCount == permissionsList.size) "All Permissions Granted ✓" else "$grantedCount of ${permissionsList.size} Granted",
+                            text = if (grantedCount == permissionsList.size) "جميع الأذونات ممنوحة بالكامل ✓" else "تم تفعيل $grantedCount من أصل ${permissionsList.size}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Grant necessary permissions for full file & media operations",
+                            text = "قم بتفعيل الأذونات الضرورية لتمكين تصفح الملفات والتشغيل في الخلفية",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -135,7 +135,7 @@ fun PermissionsScreen(
                     FilledTonalButton(onClick = { permissionsManager.openAppSettings() }) {
                         Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("App Settings")
+                        Text("إعدادات التطبيق")
                     }
                 }
             }
@@ -143,7 +143,7 @@ fun PermissionsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Detailed Permissions List",
+                text = "قائمة الأذونات التفصيلية",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -153,10 +153,10 @@ fun PermissionsScreen(
             PermissionItemCard(
                 item = item,
                 onRequest = {
-                    if (item.id == "all_files_perm") {
-                        permissionsManager.openAllFilesAccessSettings()
-                    } else {
-                        singlePermissionLauncher.launch(item.permissionKey)
+                    when (item.id) {
+                        "all_files_perm" -> permissionsManager.openAllFilesAccessSettings()
+                        "overlay_perm" -> permissionsManager.openOverlaySettings()
+                        else -> singlePermissionLauncher.launch(item.permissionKey)
                     }
                 }
             )
@@ -174,12 +174,12 @@ fun PermissionsScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Zero Data Leak Guarantee",
+                            text = "ضمان حماية وخصوصية البيانات 100%",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "FileHub Pro operates strictly on-device. Your private files, music, videos, and credentials are never transmitted to unauthorized third-party servers.",
+                            text = "يعمل FileHub Pro محلياً بالكامل على جهازك. ملفاتك وصورك ومقاطعك ومستنداتك لا يتم نقلها لأي خوادم خارجية غير مصرح بها.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -208,7 +208,7 @@ fun PermissionItemCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Icon(
                         imageVector = if (item.isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
                         contentDescription = null,
@@ -218,11 +218,11 @@ fun PermissionItemCard(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = item.name,
+                            text = item.nameAr,
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = item.nameAr,
+                            text = item.name,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -235,7 +235,7 @@ fun PermissionItemCard(
                         color = Color(0xFF10B981).copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = "Granted ✓",
+                            text = "ممنوح ✓",
                             color = Color(0xFF10B981),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -247,7 +247,7 @@ fun PermissionItemCard(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.testTag("grant_${item.id}")
                     ) {
-                        Text("Grant")
+                        Text("منح الإذن")
                     }
                 }
             }
@@ -255,14 +255,14 @@ fun PermissionItemCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = item.description,
+                text = item.descriptionAr,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = item.descriptionAr,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                text = item.description,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
         }
     }
