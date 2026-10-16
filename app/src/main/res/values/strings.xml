@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">FileHub Pro</string>
+    <string name="nav_files">Files</string>
+    <string name="nav_media">Media &amp; Music</string>
+    <string name="nav_browser">Browser &amp; YouTube</string>
+    <string name="nav_cloud">Cloud &amp; Storage</string>
+    <string name="nav_vault">Vault &amp; Privacy</string>
+    <string name="search_placeholder">Search files, videos, audios...</string>
+    <string name="permission_required">Permissions Required</string>
+    <string name="grant_permissions">Grant Access</string>
+</resources>

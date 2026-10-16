@@ -1,0 +1,6 @@
+{
+  "name": "FileHub Pro",
+  "description": "All-in-one file manager, background media player, browser, cloud sync, and secure privacy vault.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

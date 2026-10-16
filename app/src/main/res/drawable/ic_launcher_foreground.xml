@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Folder Back Tab -->
+    <path
+        android:pathData="M27,33h20l6,6h26c2.76,0 5,2.24 5,5v4H22v-10c0,-2.76 2.24,-5 5,-5z"
+        android:fillColor="#0284C7" />
+    
+    <!-- Folder Main Body with Linear Gradient -->
+    <path
+        android:pathData="M24,42h60c3.31,0 6,2.69 6,6v26c0,3.31 -2.69,6 -6,6H24c-3.31,0 -6,-2.69 -6,-6V48c0,-3.31 2.69,-6 6,-6z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="24"
+                android:startY="42"
+                android:endX="84"
+                android:endY="80"
+                android:type="linear">
+                <item android:color="#38BDF8" android:offset="0.0" />
+                <item android:color="#6366F1" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Play Symbol in center of folder -->
+    <path
+        android:pathData="M48,51.5v17l14,-8.5z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Security Lock/Shield Badge in Corner -->
+    <path
+        android:pathData="M70,30c5,0 12,-4 12,-4s7,4 12,4c0,9 -4,15 -12,18 -8,-3 -12,-9 -12,-18z"
+        android:fillColor="#F59E0B" />
+    <path
+        android:pathData="M80,36c-1.1,0 -2,0.9 -2,2v2h-1c-0.55,0 -1,0.45 -1,1v5c0,0.55 0.45,1 1,1h8c0.55,0 1,-0.45 1,-1v-5c0,-0.55 -0.45,-1 -1,-1h-1v-2c0,-1.1 -0.9,-2 -2,-2zm0,1.2c0.44,0 0.8,0.36 0.8,0.8v2h-1.6v-2c0,-0.44 0.36,-0.8 0.8,-0.8z"
+        android:fillColor="#FFFFFF" />
+</vector>
