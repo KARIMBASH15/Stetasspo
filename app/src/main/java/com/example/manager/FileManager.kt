@@ -41,8 +41,8 @@ class FileManager(private val context: Context) {
 
     fun getRootDirectory(): File {
         val extStorage = Environment.getExternalStorageDirectory()
-        // If external primary storage exists and can be read, use it as root
-        return if (extStorage.exists() && extStorage.canRead()) {
+        // If external primary storage exists and can be read or written, use it as root
+        return if (extStorage != null && extStorage.exists() && (extStorage.canRead() || extStorage.canWrite())) {
             extStorage
         } else {
             getAppStorageDirectory()
@@ -50,15 +50,21 @@ class FileManager(private val context: Context) {
     }
 
     fun getAppStorageDirectory(): File {
-        val appFolder = File(Environment.getExternalStorageDirectory(), "FileHub")
-        if (!appFolder.exists()) {
-            try {
-                appFolder.mkdirs()
-            } catch (_: Exception) {}
-        }
         val external = context.getExternalFilesDir(null)
         val filesDir = context.filesDir
-        return if (appFolder.exists() && appFolder.canWrite()) appFolder else (external ?: filesDir)
+        val safeFallback = external ?: filesDir
+        return try {
+            val appFolder = File(Environment.getExternalStorageDirectory(), "FileHub")
+            if (appFolder.exists() && appFolder.canWrite()) {
+                appFolder
+            } else if (appFolder.mkdirs() && appFolder.canWrite()) {
+                appFolder
+            } else {
+                safeFallback
+            }
+        } catch (_: Exception) {
+            safeFallback
+        }
     }
 
     fun getStorageShortcuts(): List<StorageShortcut> {
@@ -297,20 +303,44 @@ class FileManager(private val context: Context) {
     }
 
     suspend fun getStorageStats(): StorageStats = withContext(Dispatchers.IO) {
-        val storagePath = try {
-            Environment.getExternalStorageDirectory().path
-        } catch (_: Exception) {
-            context.filesDir.path
-        }
-        val stat = try {
-            StatFs(storagePath)
-        } catch (_: Exception) {
-            StatFs(context.filesDir.path)
+        var totalSpace = 0L
+        var freeSpace = 0L
+
+        // Primary: External Storage
+        try {
+            val extDir = Environment.getExternalStorageDirectory()
+            if (extDir != null && extDir.exists()) {
+                val stat = StatFs(extDir.path)
+                totalSpace = stat.totalBytes
+                freeSpace = stat.availableBytes
+            }
+        } catch (_: Exception) {}
+
+        // Fallback 1: Data directory
+        if (totalSpace <= 0L) {
+            try {
+                val dataDir = Environment.getDataDirectory()
+                val stat = StatFs(dataDir.path)
+                totalSpace = stat.totalBytes
+                freeSpace = stat.availableBytes
+            } catch (_: Exception) {}
         }
 
-        val totalSpace = stat.totalBytes.coerceAtLeast(1024L * 1024L * 1024L * 8L)
-        val freeSpace = stat.availableBytes.coerceAtLeast(0L)
-        val realUsed = (totalSpace - freeSpace).coerceAtLeast(0L)
+        // Fallback 2: App filesDir
+        if (totalSpace <= 0L) {
+            try {
+                val stat = StatFs(context.filesDir.path)
+                totalSpace = stat.totalBytes
+                freeSpace = stat.availableBytes
+            } catch (_: Exception) {}
+        }
+
+        if (totalSpace <= 0L) {
+            totalSpace = 64L * 1024L * 1024L * 1024L
+            freeSpace = 32L * 1024L * 1024L * 1024L
+        }
+
+        val realUsed = (totalSpace - freeSpace).coerceIn(0L, totalSpace)
 
         // Query MediaStore for fast, accurate media size sums across device storage
         var img = queryMediaStoreCategoryBytes(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
@@ -374,12 +404,12 @@ class FileManager(private val context: Context) {
     }
 
     fun formatFileSize(bytes: Long): String {
-        if (bytes <= 0) return "0 B"
+        if (bytes <= 0) return "0 بايت (0 B)"
         val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        val unitsAr = arrayOf("بايت", "ك.ب", "م.ب", "ج.ب", "ت.ب")
         val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
         val formatted = String.format(Locale.US, "%.1f", bytes / Math.pow(1024.0, digitGroups.toDouble()))
-        val unitsAr = arrayOf("بايت", "ك.ب", "م.ب", "ج.ب", "ت.ب")
-        return "$formatted ${units[digitGroups]} (${unitsAr[digitGroups]})"
+        return "$formatted ${unitsAr[digitGroups]} ($formatted ${units[digitGroups]})"
     }
 
     fun formatDate(timestamp: Long): String {
@@ -388,18 +418,35 @@ class FileManager(private val context: Context) {
     }
 
     suspend fun initializeSampleFiles() = withContext(Dispatchers.IO) {
-        val root = getRootDirectory()
-        val docsDir = File(root, "Documents").apply { mkdirs() }
-        val musicDir = File(root, "Music").apply { mkdirs() }
-        val videosDir = File(root, "Videos").apply { mkdirs() }
-        val webDir = File(root, "WebProjects").apply { mkdirs() }
+        try {
+            // Determine a guaranteed writable base directory
+            val root = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+                val ext = Environment.getExternalStorageDirectory()
+                if (ext != null && ext.canWrite()) ext else getAppStorageDirectory()
+            } else {
+                getAppStorageDirectory()
+            }
 
-        // 1. Sample HTML File
-        val htmlFile = File(webDir, "index.html")
-        if (!htmlFile.exists()) {
-            htmlFile.writeText(
-                """<!DOCTYPE html>
-<html lang="en">
+            if (!root.exists()) {
+                try { root.mkdirs() } catch (_: Exception) {}
+            }
+            if (!root.canWrite()) {
+                return@withContext
+            }
+
+            val docsDir = File(root, "Documents")
+            val musicDir = File(root, "Music")
+            val videosDir = File(root, "Videos")
+            val webDir = File(root, "WebProjects")
+
+            // 1. Sample HTML File
+            try {
+                if (webDir.exists() || webDir.mkdirs()) {
+                    val htmlFile = File(webDir, "index.html")
+                    if (!htmlFile.exists()) {
+                        htmlFile.writeText(
+                            """<!DOCTYPE html>
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -411,6 +458,7 @@ class FileManager(private val context: Context) {
             color: #f8fafc;
             padding: 24px;
             margin: 0;
+            text-align: right;
         }
         .card {
             background: rgba(255, 255, 255, 0.05);
@@ -462,79 +510,109 @@ class FileManager(private val context: Context) {
     </script>
 </body>
 </html>"""
-            )
-        }
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
 
-        // 2. Sample Audio WAV File (Synthesized 440Hz Sine Wave chime for testing player!)
-        val sampleAudio = File(musicDir, "Cyber_Tone_Sample.wav")
-        if (!sampleAudio.exists()) {
-            writeWavFile(sampleAudio, durationSeconds = 6, sampleRate = 44100, frequency = 440.0)
-        }
+            // 2. Sample Audio WAV File (Synthesized 440Hz Sine Wave chime for testing player!)
+            try {
+                if (musicDir.exists() || musicDir.mkdirs()) {
+                    val sampleAudio = File(musicDir, "Cyber_Tone_Sample.wav")
+                    if (!sampleAudio.exists()) {
+                        writeWavFile(sampleAudio, durationSeconds = 6, sampleRate = 44100, frequency = 440.0)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
 
-        // 3. Sample Text file
-        val textFile = File(docsDir, "Welcome_Note.txt")
-        if (!textFile.exists()) {
-            textFile.writeText(
-                """FileHub Pro - ميزات التطبيق الشاملة:
+            // 3. Sample Text file
+            try {
+                if (docsDir.exists() || docsDir.mkdirs()) {
+                    val textFile = File(docsDir, "Welcome_Note.txt")
+                    if (!textFile.exists()) {
+                        textFile.writeText(
+                            """FileHub Pro - ميزات التطبيق الشاملة:
 - إدارة متكاملة للملفات مع النسخ، القص، اللصق، الحذف، التحديد، وإعادة التسمية.
 - فك الضغط (Unzip) وضغط الملفات إلى ZIP بكل سهولة.
 - مشغل موسيقى MP3 وفيديو متطور مع دعم التشغيل في الخلفية حتى مع إغلاق الشاشة.
 - متصفح ويب مدمج مع دعم يوتيوب وتشغيل وتنزيل الميديا وصفحات HTML.
 - خزنة آمنة مشفرة لحماية الصور والمستندات بكلمة مرور PIN.
 - مركز متقدم لإدارة وتفقد أذونات التخزين والنظام ومراقبة سعة الذاكرة السحابية والمحلية."""
-            )
-        }
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
 
-        // 4. Sample Video
-        val videoDir = File(videosDir, "Demo_Clip.mp4")
-        if (videoDir.exists() && videoDir.length() < 1024) {
-            videoDir.delete() // Remove corrupt placeholder
+            // 4. Sample Video
+            try {
+                val videoDir = File(videosDir, "Demo_Clip.mp4")
+                if (videoDir.exists() && videoDir.length() < 1024) {
+                    videoDir.delete() // Remove corrupt placeholder
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     private fun writeWavFile(file: File, durationSeconds: Int, sampleRate: Int, frequency: Double) {
-        val totalAudioLen = (durationSeconds * sampleRate * 2).toLong()
-        val totalDataLen = totalAudioLen + 36
-        val channels = 1
-        val byteRate = (16 * sampleRate * channels / 8).toLong()
-
-        val header = ByteArray(44)
-        header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte(); header[2] = 'F'.code.toByte(); header[3] = 'F'.code.toByte()
-        header[4] = (totalDataLen and 0xff).toByte()
-        header[5] = ((totalDataLen shr 8) and 0xff).toByte()
-        header[6] = ((totalDataLen shr 16) and 0xff).toByte()
-        header[7] = ((totalDataLen shr 24) and 0xff).toByte()
-        header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte(); header[10] = 'V'.code.toByte(); header[11] = 'E'.code.toByte()
-        header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte(); header[14] = 't'.code.toByte(); header[15] = ' '.code.toByte()
-        header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0
-        header[20] = 1; header[21] = 0
-        header[22] = channels.toByte(); header[23] = 0
-        header[24] = (sampleRate and 0xff).toByte()
-        header[25] = ((sampleRate shr 8) and 0xff).toByte()
-        header[26] = ((sampleRate shr 16) and 0xff).toByte()
-        header[27] = ((sampleRate shr 24) and 0xff).toByte()
-        header[28] = (byteRate and 0xff).toByte()
-        header[29] = ((byteRate shr 8) and 0xff).toByte()
-        header[30] = ((byteRate shr 16) and 0xff).toByte()
-        header[31] = ((byteRate shr 24) and 0xff).toByte()
-        header[32] = (2 * 1).toByte(); header[33] = 0
-        header[34] = 16; header[35] = 0
-        header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte(); header[38] = 't'.code.toByte(); header[39] = 'a'.code.toByte()
-        header[40] = (totalAudioLen and 0xff).toByte()
-        header[41] = ((totalAudioLen shr 8) and 0xff).toByte()
-        header[42] = ((totalAudioLen shr 16) and 0xff).toByte()
-        header[43] = ((totalAudioLen shr 24) and 0xff).toByte()
-
-        FileOutputStream(file).use { out ->
-            out.write(header)
-            val numSamples = durationSeconds * sampleRate
-            for (i in 0 until numSamples) {
-                val time = i.toDouble() / sampleRate
-                val angle = 2.0 * Math.PI * frequency * time
-                val sample = (Math.sin(angle) * 32767).toInt().toShort()
-                out.write(sample.toInt() and 0xff)
-                out.write((sample.toInt() shr 8) and 0xff)
+        try {
+            if (file.parentFile?.exists() != true) {
+                file.parentFile?.mkdirs()
             }
+            val totalAudioLen = (durationSeconds * sampleRate * 2).toLong()
+            val totalDataLen = totalAudioLen + 36
+            val channels = 1
+            val byteRate = (16 * sampleRate * channels / 8).toLong()
+
+            val header = ByteArray(44)
+            header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte(); header[2] = 'F'.code.toByte(); header[3] = 'F'.code.toByte()
+            header[4] = (totalDataLen and 0xff).toByte()
+            header[5] = ((totalDataLen shr 8) and 0xff).toByte()
+            header[6] = ((totalDataLen shr 16) and 0xff).toByte()
+            header[7] = ((totalDataLen shr 24) and 0xff).toByte()
+            header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte(); header[10] = 'V'.code.toByte(); header[11] = 'E'.code.toByte()
+            header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte(); header[14] = 't'.code.toByte(); header[15] = ' '.code.toByte()
+            header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0
+            header[20] = 1; header[21] = 0
+            header[22] = channels.toByte(); header[23] = 0
+            header[24] = (sampleRate and 0xff).toByte()
+            header[25] = ((sampleRate shr 8) and 0xff).toByte()
+            header[26] = ((sampleRate shr 16) and 0xff).toByte()
+            header[27] = ((sampleRate shr 24) and 0xff).toByte()
+            header[28] = (byteRate and 0xff).toByte()
+            header[29] = ((byteRate shr 8) and 0xff).toByte()
+            header[30] = ((byteRate shr 16) and 0xff).toByte()
+            header[31] = ((byteRate shr 24) and 0xff).toByte()
+            header[32] = (2 * 1).toByte(); header[33] = 0
+            header[34] = 16; header[35] = 0
+            header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte(); header[38] = 't'.code.toByte(); header[39] = 'a'.code.toByte()
+            header[40] = (totalAudioLen and 0xff).toByte()
+            header[41] = ((totalAudioLen shr 8) and 0xff).toByte()
+            header[42] = ((totalAudioLen shr 16) and 0xff).toByte()
+            header[43] = ((totalAudioLen shr 24) and 0xff).toByte()
+
+            FileOutputStream(file).use { out ->
+                out.write(header)
+                val numSamples = durationSeconds * sampleRate
+                for (i in 0 until numSamples) {
+                    val time = i.toDouble() / sampleRate
+                    val angle = 2.0 * Math.PI * frequency * time
+                    val sample = (Math.sin(angle) * 32767).toInt().toShort()
+                    out.write(sample.toInt() and 0xff)
+                    out.write((sample.toInt() shr 8) and 0xff)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

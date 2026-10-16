@@ -234,10 +234,14 @@ fun MainApp(
         }
     }
 
-    // Initialize sample files for immediate testing
+    // Initialize sample files safely for immediate testing
     LaunchedEffect(Unit) {
         scope.launch {
-            fileManager.initializeSampleFiles()
+            try {
+                fileManager.initializeSampleFiles()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

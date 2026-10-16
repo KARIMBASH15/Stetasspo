@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.Sort
@@ -55,6 +56,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -63,6 +65,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -77,9 +80,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.manager.FileManager
 import com.example.manager.PermissionsManager
 import com.example.manager.StorageShortcut
@@ -88,6 +95,7 @@ import com.example.model.FileCategory
 import com.example.model.FileItem
 import com.example.model.MediaTrack
 import com.example.model.SortOption
+import com.example.model.StorageStats
 import com.example.service.PlaybackController
 import com.example.ui.components.FileCardItem
 import com.example.ui.components.FileDetailsBottomSheet
@@ -110,6 +118,8 @@ fun FilesScreen(
     val scope = rememberCoroutineScope()
 
     var currentDir by remember { mutableStateOf(fileManager.getRootDirectory()) }
+    var hasAllFiles by remember { mutableStateOf(permissionsManager?.hasAllFilesAccess() ?: true) }
+    var storageStats by remember { mutableStateOf<StorageStats?>(null) }
     var selectedCategory by remember { mutableStateOf(FileCategory.ALL) }
     var sortOption by remember { mutableStateOf(SortOption.NAME_ASC) }
     var searchQuery by remember { mutableStateOf("") }
@@ -129,17 +139,6 @@ fun FilesScreen(
     var showEditorDialog by remember { mutableStateOf<FileItem?>(null) }
     var editorInitialContent by remember { mutableStateOf("") }
 
-    // Directory navigation & back press handler
-    val canGoBack = currentDir.absolutePath != fileManager.getRootDirectory().absolutePath
-    BackHandler(enabled = canGoBack || isSelectionMode) {
-        if (isSelectionMode) {
-            isSelectionMode = false
-            fileItems.forEachIndexed { i, item -> fileItems[i] = item.copy(isSelected = false) }
-        } else if (canGoBack) {
-            currentDir.parentFile?.let { currentDir = it }
-        }
-    }
-
     fun refreshFiles() {
         scope.launch {
             val list = fileManager.listDirectory(
@@ -150,6 +149,47 @@ fun FilesScreen(
             )
             fileItems.clear()
             fileItems.addAll(list)
+        }
+    }
+
+    fun loadStorage() {
+        scope.launch {
+            storageStats = fileManager.getStorageStats()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadStorage()
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = permissionsManager?.hasAllFilesAccess() ?: true
+                val wasGranted = hasAllFiles
+                hasAllFiles = granted
+                if (granted && !wasGranted) {
+                    currentDir = fileManager.getRootDirectory()
+                }
+                refreshFiles()
+                loadStorage()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Directory navigation & back press handler
+    val canGoBack = currentDir.absolutePath != fileManager.getRootDirectory().absolutePath
+    BackHandler(enabled = canGoBack || isSelectionMode) {
+        if (isSelectionMode) {
+            isSelectionMode = false
+            fileItems.forEachIndexed { i, item -> fileItems[i] = item.copy(isSelected = false) }
+        } else if (canGoBack) {
+            currentDir.parentFile?.let { currentDir = it }
         }
     }
 
@@ -358,7 +398,7 @@ fun FilesScreen(
             }
 
             // Missing All Files Permission Banner
-            if (permissionsManager != null && !permissionsManager.hasAllFilesAccess()) {
+            if (permissionsManager != null && !hasAllFiles) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -400,6 +440,80 @@ fun FilesScreen(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("تفعيل", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            // Storage Capacity Overview Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Storage,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "مساحة الذاكرة والتخزين",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                loadStorage()
+                                refreshFiles()
+                                Toast.makeText(context, "تم تحديث بيانات الذاكرة والملفات", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "تحديث الذاكرة",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    storageStats?.let { stats ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { stats.usedPercentage },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = if (stats.usedPercentage > 0.9f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "المستخدمة: ${fileManager.formatFileSize(stats.usedBytes)} (${(stats.usedPercentage * 100).toInt()}%)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "المتوفرة: ${fileManager.formatFileSize(stats.freeBytes)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -489,19 +603,19 @@ fun FilesScreen(
                     },
                     onCopy = {
                         fileManager.setClipboard(selectedItems.map { it.file }, cutMode = false)
-                        Toast.makeText(context, "Copied ${selectedItems.size} items", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "تم نسخ ${selectedItems.size} عنصر", Toast.LENGTH_SHORT).show()
                         isSelectionMode = false
                     },
                     onCut = {
                         fileManager.setClipboard(selectedItems.map { it.file }, cutMode = true)
-                        Toast.makeText(context, "Cut ${selectedItems.size} items", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "تم قص ${selectedItems.size} عنصر", Toast.LENGTH_SHORT).show()
                         isSelectionMode = false
                     },
                     onZip = {
                         scope.launch {
                             val zipFile = File(currentDir, "Archive_${System.currentTimeMillis()}.zip")
                             val success = fileManager.zipFiles(selectedItems.map { it.file }, zipFile)
-                            Toast.makeText(context, if (success) "Zipped to ${zipFile.name}" else "Failed to zip", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, if (success) "تم الضغط بنجاح إلى ${zipFile.name}" else "فشل ضغط الملفات", Toast.LENGTH_SHORT).show()
                             isSelectionMode = false
                             refreshFiles()
                         }
@@ -512,7 +626,7 @@ fun FilesScreen(
                             selectedItems.forEach { item ->
                                 if (vaultManager.lockFile(item.file, item.mimeType)) lockedCount++
                             }
-                            Toast.makeText(context, "Moved $lockedCount items to Safe Vault", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "تم نقل $lockedCount عنصر إلى الخزنة الآمنة", Toast.LENGTH_SHORT).show()
                             isSelectionMode = false
                             refreshFiles()
                         }
@@ -520,7 +634,7 @@ fun FilesScreen(
                     onDelete = {
                         scope.launch {
                             fileManager.deleteFiles(selectedItems.map { it.file })
-                            Toast.makeText(context, "Deleted ${selectedItems.size} items", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "تم حذف ${selectedItems.size} عنصر بنجاح", Toast.LENGTH_SHORT).show()
                             isSelectionMode = false
                             refreshFiles()
                         }
@@ -542,23 +656,45 @@ fun FilesScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.FilterList,
+                            imageVector = if (permissionsManager != null && !hasAllFiles) Icons.Default.Warning else Icons.Default.FilterList,
                             contentDescription = null,
                             modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            tint = if (permissionsManager != null && !hasAllFiles) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "No files found in this category",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = if (permissionsManager != null && !hasAllFiles) {
+                                "إذن إدارة جميع الملفات مطلوب لعرض مجلدات الذاكرة"
+                            } else {
+                                "لا توجد ملفات في هذا المجلد أو القسم"
+                            },
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = {
-                            selectedCategory = FileCategory.ALL
-                            searchQuery = ""
-                        }) {
-                            Text("Reset filters")
+                        if (permissionsManager != null && !hasAllFiles) {
+                            Text(
+                                text = "لتصفح الذاكرة الداخلية بالكامل والتعديل على الملفات، يرجى تفعيل إذن الوصول لجميع الملفات من الإعدادات.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { permissionsManager.openAllFilesAccessSettings() },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("تفعيل إذن إدارة جميع الملفات")
+                            }
+                        } else {
+                            TextButton(onClick = {
+                                selectedCategory = FileCategory.ALL
+                                searchQuery = ""
+                            }) {
+                                Text("إعادة ضبط الفلاتر")
+                            }
                         }
                     }
                 }
